@@ -1,0 +1,203 @@
+"""speed_py controller."""
+
+# You may need to import some classes of the controller module. Ex:
+#  from controller import Robot, Motor, DistanceSensor
+from controller import Robot
+from controller import Motor
+from controller import DistanceSensor
+from controller import Camera
+from controller import LED
+import array
+
+robot = Robot()
+
+TIME_STEP = 64
+RIGHT = 1
+LEFT = 0
+    
+    #distance sensors
+NB_GROUND_SENS = 8
+NB_LEDS = 5
+MAX_GS = 520 
+MIN_GS = 110 
+NEW_GS = 1000
+
+gs = []
+gsNames = ['gs0', 'gs1', 'gs2', 'gs3', 'gs4', 'gs5', 'gs6', 'gs7']
+for i in range(8):
+    gs.append( robot.getDevice(gsNames[i]))
+    gs[i].enable(TIME_STEP)
+    
+def run_robot(robot):
+# create the Robot instance.
+    
+    #overlap
+    OL = 200
+    gs_value = [0, 0, 0, 0, 0, 0, 0, 0]
+    gs_new = [0, 0, 0, 0, 0, 0, 0, 0]
+    #Test array
+    maxGS = [500, 500, 500, 500, 500, 500, 500, 500]
+    minGS = [500, 500, 500, 500, 500, 500, 500, 500]
+    led = [NB_LEDS]
+    
+   
+    Position = 0
+    online = False
+    
+    def ReadGroudSensors():
+        online = False
+        avgS = 0
+        sumS = 0
+        
+        for  i in range (0, NB_GROUND_SENS +1, +1 ):
+            gs_value[i] = gs[i].getValue()
+
+            if(gs_value[i]<minGS[i]): 
+                minGS[i]=gs_value[i]
+            if(gs_value[i]>maxGS[i]): 
+                maxGS[i]=gs_value[i]
+        gs_new[i] = (gs_value[i]-MIN_GS)/(MAX_GS-MIN_GS)*NEW_GS
+
+        #Limited values between 0 and 1000 (NEW_GS)
+        if(gs_new[i]>NEW_GS):
+            gs_new[i]=NEW_GS
+        if(gs_new[i]<0):
+            gs_new[i]=0
+        
+        if(gs_new[i]>200):
+            online = true
+        if(gs_new[i]>50):
+          #Average groud sensor value
+          avgS += gs_new[i]*(i*NEW_GS)
+          # Sum ground sensor value
+          sumS += gs_new[i]
+        
+        if(bool(online)):
+           Position = avgS/sumS #position calkulation
+        elif (Position < NEW_GS*(NB_GROUND_SENS-1)/2):
+            Position = 0 #Left Sensor Memory Position
+        else :
+            Position = NEW_GS*(NB_GROUND_SENS-1) # Right Sensor Memory Position
+    lfm_speed=[2]
+
+    P = 0
+    I = 0
+    D = 0
+    pErr = 0
+    PID = 0
+    Kp=0.80 # 0.80
+    Ki=0.00 # 0.00
+    Kd=0.02 # 0.02
+    
+    LFM_FS = 3500 
+     
+    def LineFollowingModule():
+         # Error Position Calculation & PID
+        P = Position - NEW_GS*(NB_GROUND_SENS-1)/2
+        I = P + pErr
+        D = P - pErr
+                    
+        PID = Kp*P + Ki*I + Kd*D
+                      
+        pErr = P
+                      
+                  #  printf("GS: %4d %4d %4d;   Max: %4d %4d %4d;   Min: %4d %4d %4d  \n", gs_value[0], gs_value[1], gs_value[2], maxGS[0], maxGS[1], maxGS[2], minGS[0], minGS[1], minGS[2]);
+        lfm_speed[LEFT] = LFM_FS + PID
+        lfm_speed[RIGHT] = LFM_FS - PID
+    timeLED = 0;
+
+    def PosLED():
+        if((Position>(NEW_GS*2.5)) and (Position<(NEW_GS*4.5))):
+            wb_led_set(led[1], 1)
+        else : 
+            wb_led_set(led[1], 0)
+          
+        if(online):
+            if(Position<(NEW_GS*2.5+OL)):
+                wb_led_set(led[0], 1)
+            else :
+                wb_led_set(led[0], 0)
+            if(Position>(NEW_GS*4.5-OL)):
+                wb_led_set(led[2], 1)
+            else :
+                wb_led_set(led[2], 0)
+       
+        else:
+            if((Position<(NEW_GS*2.5+OL)) and (timeLED>10)):
+                wb_led_set(led[0], not wb_led_get(led[0]))
+                timeLED = 0
+            if((Position>(NEW_GS*4.5-OL)) and (timeLED>10)):
+                wb_led_set(led[2], not wb_led_get(led[2]))
+                timeLED = 0
+            
+            timeLED = timeLED + 1
+       
+   
+if __name__ == "__main__":
+
+    
+    run_robot(robot)
+    camera = Camera("camera")
+    camera.enable(64)
+    
+    
+    
+   
+    speed =  [2]
+    name = "\0" * 20
+    for  i in range (0, NB_GROUND_SENS +1, +1 ):
+        print(name, "gs%d", i)
+        gs[i] = robot.getDevice(name) #* ground sensors */
+    for i in range (0, NB_LEDS +1, +1):
+        print(name, "led%d", i)
+        led[i] = robot.getDevice(name)
+        led[i].set( 1)
+      
+    left_motor = robot.getDevice('left wheel')
+    right_motor = robot.getDevice('right wheel')
+    left_motor.setPosition(float('inf'))
+    right_motor.setPosition(float('inf'))
+    left_motor.setVelocity(0.0)
+    right_motor.setVelocity(0.0)
+        
+    for i in range ():
+        #Run one simulation step
+        robot.step(TIME_STEP)
+        
+        ReadGroudSensors()
+        PosLED()
+            
+            # Speed initialization
+        
+        speed[LEFT] = 0
+        speed[RIGHT] = 0
+        
+   
+            # *** START OF SUBSUMPTION ARCHITECTURE ***
+            # LFM - Line Following Module
+        LineFollowingModule();
+        
+        speed[LEFT] = lfm_speed[LEFT];
+        speed[RIGHT] = lfm_speed[RIGHT];
+            # Routines used when detecting the line
+    if(bool ( not online)):
+        if(P == -NEW_GS*(NB_GROUND_SENS-1)/2):
+            speed[LEFT] = -LFM_FS;
+            speed[RIGHT] = LFM_FS;
+              
+        if(P == NEW_GS*(NB_GROUND_SENS-1)/2):
+            speed[LEFT] = LFM_FS;
+            speed[RIGHT] = -LFM_FS;
+         
+        print("%4d   %4d   %4d   %4d   %4d   %4d   %4d   %4d   %4d   %5d   OnLine: %d  \n", gs_new[0], gs_new[1], gs_new[2], gs_new[3], gs_new[4], gs_new[5], gs_new[6], gs_new[7], int(Position), int(P), online);
+          
+            # Speed computation
+        left_motor.setVelocity( 0.00628 * speed[LEFT]);
+        right_motor.setVelocity ( 0.00628 * speed[RIGHT]);
+     
+
+    
+  
+    
+    
+    
